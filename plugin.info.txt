@@ -1,0 +1,7 @@
+base   editx
+author Danny Lin
+email  
+date   2010-12-22
+name   editx
+desc   Extended edit function such as renaming a page
+url    
