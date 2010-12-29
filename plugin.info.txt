@@ -1,7 +1,7 @@
 base   editx
 author Danny Lin
-email  
-date   2010-12-22
+email  danny0838[at]pchome[dot]com[dot]tw
+date   2010-12-29
 name   editx
-desc   Extended edit function such as renaming a page
-url    
+desc   Extended edit functions such as renaming or deleting a page
+url    https://github.com/danny0838/editx
