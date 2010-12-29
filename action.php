@@ -143,7 +143,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $sum = sprintf( $this->getLang('rp_newsummary'), $oldpage, $newpage );
         saveWikiText($newpage,$text,$sum);
         // recreate old page
-        $text = "~~REDIRECT>:$newpage~~";
+        $text = $this->getConf('redirecttext');
+        if (!$text) $text = $this->getLang('redirecttext');
+        $text = str_replace( '@ID@', $newpage, $text );
         if ($summary)
             $sum = sprintf( $this->getLang('rp_oldsummaryx'), $oldpage, $newpage, $summary );
         else

@@ -6,6 +6,7 @@
  */
 
 $lang['title']              = '%s Management';
+$lang['redirecttext']       = 'This page is redirected to [[:@ID@]].';
 
 // rename page = rp
 $lang['rp_title']           = 'Page Rename';

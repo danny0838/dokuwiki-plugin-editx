@@ -6,6 +6,7 @@
  */
 
 $lang['title']              = '%s 管理';
+$lang['redirecttext']       = '本頁已重定向至 [[:@ID@]]。';
 
 // rename page = rp
 $lang['rp_title']           = '頁面更名';
