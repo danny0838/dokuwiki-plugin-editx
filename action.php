@@ -20,6 +20,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     
     function _prepend_to_edit(&$event, $param) {
         if ($event->data != 'edit') return;
+        if (auth_quickaclcheck($ID)<AUTH_EDIT) return;
         global $ID;
         $link = html_wikilink($ID.'?do=editx');
         $intro = $this->locale_xhtml('intro');
