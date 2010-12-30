@@ -17,7 +17,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $contr->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, '_handle_act', array());
         $contr->register_hook('TPL_ACT_UNKNOWN', 'BEFORE', $this, '_handle_tpl_act', array());
     }
-    
+
+    /**
+     * main hooks
+     */ 
     function _prepend_to_edit(&$event, $param) {
         if ($event->data != 'edit') return;
         if (auth_quickaclcheck($ID)<AUTH_EDIT) return;
@@ -27,16 +30,16 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $intro = str_replace( '@LINK@', $link, $intro );
         print $intro;
     }
-    
+
     function _handle_act(&$event, $param) {
         if($event->data != 'editx') return;
         $event->preventDefault();
     }
-    
+
     function _handle_tpl_act(&$event, $param) {
         if($event->data != 'editx') return;
         $event->preventDefault();
-        
+
         switch ($_REQUEST['work']) {
             case 'rename':
                 $oldpage = cleanID($_REQUEST['oldpage']);
@@ -59,24 +62,32 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 break;
         }
     }
-    
-    function _get_delete_ns() {
-        static $deletens = null;
-        if ($deletens==null) {
-            $ns = cleanID($this->getConf('deletens'));
-            if (!$ns) $ns = 'delete';
-            $deletens = $ns;
-        }
-        return $deletens;
+
+    /**
+     * helper functions
+     */
+    function _auth_can_rename($id) {
+        return auth_quickaclcheck($id)>=AUTH_EDIT;
     }
-    
+
+    function _auth_can_rename_nr($id) {
+        return auth_quickaclcheck($id)>=AUTH_DELETE;
+    }
+
+    function _auth_can_delete($id) {
+        return auth_quickaclcheck($id)>=AUTH_DELETE;
+    }
+
+    /**
+     * main functions
+     */
     function _rename_page($oldpage, $newpage, $summary) {
         // check old page
         if (!$oldpage) {
             $this->errors[] = $this->getLang('rp_msg_old_empty');
         } else if (!page_exists($oldpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_old_noexist'), $oldpage );
-        } else if (auth_quickaclcheck($oldpage)<AUTH_EDIT) {
+        } else if (!$this->_auth_can_rename($oldpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $oldpage );
         } else if (checklock($oldpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $oldpage );
@@ -86,7 +97,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $this->errors[] = $this->getLang('rp_msg_new_empty');
         } else if (page_exists($newpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), $newpage );
-        } else if (auth_quickaclcheck($newpage)<AUTH_EDIT) {
+        } else if (!$this->_auth_can_rename($newpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $newpage );
         } else if (checklock($newpage)) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $newpage );
@@ -103,7 +114,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $data = array( rp_newpage => $newpage, rp_summary => $summary );
         $this->_print_form($data);
     }
-    
+
     function _rename_page_work($oldpage, $newpage, $summary) {
         // make new ns folder
         $newmetadir = dirname(metaFN($newpage,'.txt'));
@@ -159,12 +170,12 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         }
         return true;
     }
-    
+
     function _delete_page($oldpage, $mode, $summary) {
         // check old page
         if (!$oldpage) {
             $this->errors[] = $this->getLang('dp_msg_old_empty');
-        } else if (auth_quickaclcheck($oldpage)<AUTH_DELETE) {
+        } else if (!$this->_auth_can_delete($oldpage)) {
             $this->errors[] = sprintf( $this->getLang('dp_msg_auth'), $oldpage );
         }
         // if no error do delete
@@ -187,7 +198,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $data = array( dp_mode => $mode, dp_summary => $summary );
         $this->_print_form($data);
     }
-    
+
     function _delete_page_delete($oldpage, $summary) {
         if ($summary) 
             $sum = sprintf( $this->getLang('dp_oldsummaryx'), $summary );
@@ -200,7 +211,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             msg( $msg, 1 );
         }
     }
-    
+
     function _delete_page_purge($oldpage, $summary) {
         $err = $this->_delete_page_delete_work($oldpage, $sum, true);
         // show messages
@@ -241,11 +252,12 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     function _print_form($data=null) {
         global $ID, $lang;
         $sel = ' selected="selected"';
-        $deletens = $this->_get_delete_ns();
-        $isdeletens = preg_match( "#^$deletens:\d+:#", $ID );
 ?>
 <h1><?php echo sprintf( $this->getLang('title'), $ID); ?></h1>
 <div id="config__manager">
+<?php 
+    if ($this->_auth_can_rename($ID)) {
+?>
     <form action="<?php echo wl($ID); ?>" method="post">
     <fieldset>
     <legend><?php echo $this->getLang('rp_title'); ?></legend>
@@ -268,8 +280,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         </p>
     </fieldset>
     </form>
-<?php 
-    if (auth_quickaclcheck($ID)>=AUTH_DELETE) {
+<?php
+    }
+    if ($this->_auth_can_delete($ID)) {
 ?>
     <form action="<?php echo wl($ID); ?>" method="post">
     <fieldset>
