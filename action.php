@@ -213,6 +213,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     }
 
     function _delete_page_purge($oldpage, $summary) {
+        if ($summary) 
+            $sum = sprintf( $this->getLang('dp_oldsummaryx'), $summary );
+        else 
+            $sum = sprintf( $this->getLang('dp_oldsummary') );
         $err = $this->_delete_page_delete_work($oldpage, $sum, true);
         // show messages
         if (!$err) {
