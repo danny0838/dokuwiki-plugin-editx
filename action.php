@@ -74,7 +74,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         return auth_quickaclcheck($id)>=AUTH_DELETE;
     }
     
-    function _locate_filepairs(&$opts, $dir, $regex, $regex_exclude=null ){
+    function _locate_filepairs(&$opts, $dir, $regex ){
         global $conf;
         $oldpath = $conf[$dir].'/'.str_replace(':','/',$opts['oldns']);
         $newpath = $conf[$dir].'/'.str_replace(':','/',$opts['newns']);
@@ -84,7 +84,6 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 if ($file{0}=='.') continue;
                 $oldfile = $oldpath.$file;
                 if (is_file($oldfile) && preg_match($regex,$file)){
-                    if ($regex_exclude && preg_match($regex_exclude,$file)) continue;
                     $opts['oldfiles'][] = $oldfile;
                     if ($opts['move']) {
                         $newfilebase = str_replace($opts['oldname'], $opts['newname'], $file);
@@ -136,7 +135,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $opts['newns'] = getNS($opts['newpage']);
             if ($opts['oldns']) $opts['oldns'] .= '/';
             if ($opts['newns']) $opts['newns'] .= '/';
-            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', '/(\.meta|\.indexed)$/' );
+            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!meta|indexed)\w*?$/' );
             $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
         }
         // if no error do rename
@@ -209,8 +208,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $opts['oldname'] = noNS($opts['oldpage']);
                 $opts['oldns'] = getNS($opts['oldpage']);
                 if ($opts['oldns']) $opts['oldns'] .= '/';
-                if (!$opts['purge']) $exclude = '/(\.changes)$/';
-                $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', $exclude );
+				if ($opts['purge'])
+					$this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', $exclude );
+				else
+					$this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!changes)\w*?$/', $exclude );
                 $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
             }
             // delete meta and attic
