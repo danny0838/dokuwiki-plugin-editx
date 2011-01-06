@@ -25,7 +25,6 @@ $lang['rp_msg_new_exist']   = 'The new page %s already exists.';
 $lang['rp_msg_locked']      = 'The page %s is locked now.';
 $lang['rp_msg_auth']        = 'You are not authorized to edit page %s.';
 $lang['rp_msg_file_conflict'] = 'A conflict occurred on new page file %s.';
-$lang['rp_msg_file_fail']   = 'An operation error occurred on file %s.';
 $lang['rp_msg_success']     = 'Page %s successfully renamed to %s.';
 
 // delete page = dp
@@ -38,8 +37,6 @@ $lang['dp_oldsummaryx']     = 'Deleted (%s)';
 $lang['dp_msg_old_empty']   = 'The old pagename cannot be empty.';
 $lang['dp_msg_auth']        = 'You are not authorized to delete page %s.';
 $lang['dp_msg_auth_new']    = 'You are not authorized to write %s.';
-$lang['dp_msg_unclear']     = 'Unable to delete files related %s completely.';
-$lang['dp_msg_file_fail']   = 'An operation error occurred on file %s.';
 $lang['dp_msg_d_success']   = 'Page %s successfully deleted.';
 $lang['dp_msg_p_success']   = 'Page %s successfully purged.';
 

@@ -78,6 +78,8 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         global $conf;
         $oldpath = $conf[$dir].'/'.str_replace(':','/',$opts['oldns']);
         $newpath = $conf[$dir].'/'.str_replace(':','/',$opts['newns']);
+		if (!$opts['oldfiles']) $opts['oldfiles'] = array();
+		if (!$opts['newfiles']) $opts['newfiles'] = array();
         $dh = @opendir($oldpath);
         if($dh) {
             while(($file = readdir($dh)) !== false){
@@ -100,6 +102,21 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             return true;
         }
         return false;
+    }
+    
+    function _apply_moves(&$opts) {
+        foreach ($opts['oldfiles'] as $i => $oldfile) {
+            $newfile = $opts['newfiles'][$i];
+            $newdir = dirname($newfile);
+            if (!io_mkdir_p($newdir)) continue;
+            io_rename($oldfile, $newfile);
+        }
+    }
+    
+    function _apply_deletes(&$opts) {
+        foreach ($opts['oldfiles'] as $oldfile) {
+            unlink($oldfile);
+        }
     }
 
     /**
@@ -153,10 +170,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $text = $this->getConf('redirecttext');
             if (!$text) $text = $this->getLang('redirecttext');
             $text = str_replace( '@ID@', $opts['newpage'], $text );
-            if ($opts['summary'])
-                $sum = sprintf( $this->getLang('rp_oldsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
-            else
-                $sum = sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
+			$sum = $opts['summary'] ?
+				sprintf( $this->getLang('rp_oldsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] ) :
+				sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
             @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
             saveWikiText($opts['oldpage'],$text,$sum);
         }
@@ -172,18 +188,6 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'] );
         $this->_print_form($data);
     }
-    
-    function _apply_moves(&$opts) {
-        foreach ($opts['oldfiles'] as $i => $oldfile) {
-            $newfile = $opts['newfiles'][$i];
-            $newdir = dirname($newfile);
-            if (!@io_mkdir_p($newdir)) {
-                $this->errors[] = sprintf( $this->getLang('rp_msg_file_fail'), $newdir);
-                continue;
-            }
-            @io_rename($oldfile, $newfile) or $this->errors[] = sprintf( $this->getLang('rp_msg_file_fail'), $oldfile);
-        }
-    }
 
     function _delete_page(&$opts) {
         // check old page
@@ -194,34 +198,24 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         }
         // if no error do delete
         if (!$this->errors) {
-            // save to old page, to pure correlation with other pages
-            if ($opts['summary']) 
-                $sum = sprintf( $this->getLang('dp_oldsummaryx'), $opts['summary'] );
-            else 
-                $sum = sprintf( $this->getLang('dp_oldsummary') );
-            if (page_exists($opts['oldpage']))
-                saveWikiText($opts['oldpage'],'',$sum);
-            else
-                addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $sum );
-            // try to locate deletes
-            if (!$this->errors) {
-                $opts['oldname'] = noNS($opts['oldpage']);
-                $opts['oldns'] = getNS($opts['oldpage']);
-                if ($opts['oldns']) $opts['oldns'] .= '/';
-				if ($opts['purge'])
-					$this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', $exclude );
-				else
-					$this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!changes)\w*?$/', $exclude );
-                $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
-            }
-            // delete meta and attic
+			// delete page, meta and attic
+			$oldpage = wikiFN($opts['oldpage']);
+			if (file_exists($oldpage)) unlink($oldpage);
+			$opts['oldname'] = noNS($opts['oldpage']);
+			$opts['oldns'] = getNS($opts['oldpage']);
+			if ($opts['oldns']) $opts['oldns'] .= '/';
+			$this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/' );
+			$this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
             $this->_apply_deletes($opts);
-            // trim change log
-            if (!$opts['purge']) {
-                $file = metaFN($opts['oldpage'],'.changes');
-                $change = end(file($file,FILE_SKIP_EMPTY_LINES));
-                @file_put_contents( $file, $change ) or $this->errors[] = sprintf( $this->getLang('dp_msg_file_fail'), $file);
-            }
+			io_sweepNS($opts['oldpage'], 'datadir');
+			io_sweepNS($opts['oldpage'], 'metadir');
+			io_sweepNS($opts['oldpage'], 'olddir');
+            // write change log
+			$sum = $opts['summary'] ? 
+				sprintf( $this->getLang('dp_oldsummaryx'), $opts['summary'] ) :
+				$this->getLang('dp_oldsummary');
+			addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $sum ); // also writes to global changes
+            if ($opts['purge']) unlink(metaFN($opts['oldpage'],'.changes'));
         }
         // show messages
         if ($this->errors) {
@@ -235,12 +229,6 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         // display form and table
         $data = array( dp_purge => $opts['purge'], dp_summary => $opts['summary'] );
         $this->_print_form($data);
-    }
-    
-    function _apply_deletes(&$opts) {
-        foreach ($opts['oldfiles'] as $oldfile) {
-            @unlink($oldfile) or $this->errors[] = sprintf( $this->getLang('dp_msg_file_fail'), $oldfile );
-        }
     }
 
     function _print_form($data=null) {
