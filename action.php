@@ -42,20 +42,16 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
 
         switch ($_REQUEST['work']) {
             case 'rename':
-                $oldpage = cleanID($_REQUEST['oldpage']);
-                $newpage = cleanID($_REQUEST['newpage']);
-                $summary = $_REQUEST['summary'];
-                $this->_rename_page($oldpage, $newpage, $summary);
+                $opts['oldpage'] = cleanID($_REQUEST['oldpage']);
+                $opts['newpage'] = cleanID($_REQUEST['newpage']);
+                $opts['summary'] = $_REQUEST['summary'];
+                $this->_rename_page($opts);
                 break;
             case 'delete':
-                $oldpage = cleanID($_REQUEST['oldpage']);
-                $mode = (int)$_REQUEST['mode'];
-                $summary = $_REQUEST['summary'];
-                $this->_delete_page($oldpage, $mode, $summary);
-                break;
-            case 'recover':
-                $summary = $_REQUEST['summary'];
-                $this->_recover_page($summary);
+                $opts['oldpage'] = cleanID($_REQUEST['oldpage']);
+                $opts['summary'] = $_REQUEST['summary'];
+                $opts['purge'] = $_REQUEST['dp_purge'];
+                $this->_delete_page($opts);
                 break;
             default:
                 $this->_print_form();
@@ -77,185 +73,178 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     function _auth_can_delete($id) {
         return auth_quickaclcheck($id)>=AUTH_DELETE;
     }
+    
+    function _locate_filepairs(&$opts, $dir, $regex, $regex_exclude=null ){
+        global $conf;
+        $oldpath = $conf[$dir].'/'.str_replace(':','/',$opts['oldns']);
+        $newpath = $conf[$dir].'/'.str_replace(':','/',$opts['newns']);
+        $dh = @opendir($oldpath);
+        if($dh) {
+            while(($file = readdir($dh)) !== false){
+                if ($file{0}=='.') continue;
+                $oldfile = $oldpath.$file;
+                if (is_file($oldfile) && preg_match($regex,$file)){
+                    if ($regex_exclude && preg_match($regex_exclude,$file)) continue;
+                    $opts['oldfiles'][] = $oldfile;
+                    if ($opts['move']) {
+                        $newfilebase = str_replace($opts['oldname'], $opts['newname'], $file);
+                        $newfile = $newpath.$newfilebase;
+                        if (@file_exists($newfile)) {
+                            $this->errors[] = sprintf( $this->getLang('rp_msg_file_conflict'), $newfilebase );
+                            return false;
+                        }
+                        $opts['newfiles'][] = $newfile;
+                    }
+                }
+            }
+            closedir($dh);
+            return true;
+        }
+        return false;
+    }
 
     /**
      * main functions
      */
-    function _rename_page($oldpage, $newpage, $summary) {
+    function _rename_page(&$opts) {
         // check old page
-        if (!$oldpage) {
+        if (!$opts['oldpage']) {
             $this->errors[] = $this->getLang('rp_msg_old_empty');
-        } else if (!page_exists($oldpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_old_noexist'), $oldpage );
-        } else if (!$this->_auth_can_rename($oldpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $oldpage );
-        } else if (checklock($oldpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $oldpage );
+        } else if (!page_exists($opts['oldpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_old_noexist'), $opts['oldpage'] );
+        } else if (!$this->_auth_can_rename($opts['oldpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $opts['oldpage'] );
+        } else if (checklock($opts['oldpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $opts['oldpage'] );
         }
         // check new page
-        if (!$newpage) {
+        if (!$opts['newpage']) {
             $this->errors[] = $this->getLang('rp_msg_new_empty');
-        } else if (page_exists($newpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), $newpage );
-        } else if (!$this->_auth_can_rename($newpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $newpage );
-        } else if (checklock($newpage)) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $newpage );
+        } else if (page_exists($opts['newpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), $opts['newpage'] );
+        } else if (!$this->_auth_can_rename($opts['newpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $opts['newpage'] );
+        } else if (checklock($opts['newpage'])) {
+            $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $opts['newpage'] );
+        }
+        // try to locate moves
+        if (!$this->errors) {
+            $opts['move'] = true;
+            $opts['oldname'] = noNS($opts['oldpage']);
+            $opts['newname'] = noNS($opts['newpage']);
+            $opts['oldns'] = getNS($opts['oldpage']);
+            $opts['newns'] = getNS($opts['newpage']);
+            if ($opts['oldns']) $opts['oldns'] .= '/';
+            if ($opts['newns']) $opts['newns'] .= '/';
+            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', '/(\.meta|\.indexed)$/' );
+            $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
         }
         // if no error do rename
-        if (count($this->errors)==0) {
-            $this->_rename_page_work($oldpage, $newpage, $summary);
+        if (!$this->errors) {
+            // move meta and attic
+            $this->_apply_moves($opts);
+            // save to newpage
+            $text = rawWiki($opts['oldpage']);
+            if ($opts['summary'])
+                $sum = sprintf( $this->getLang('rp_newsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
+            else
+                $sum = sprintf( $this->getLang('rp_newsummary'), $opts['oldpage'], $opts['newpage'] );
+            saveWikiText($opts['newpage'],$text,$sum);
+            // recreate old page
+            $text = $this->getConf('redirecttext');
+            if (!$text) $text = $this->getLang('redirecttext');
+            $text = str_replace( '@ID@', $opts['newpage'], $text );
+            if ($opts['summary'])
+                $sum = sprintf( $this->getLang('rp_oldsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
+            else
+                $sum = sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
+            @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
+            saveWikiText($opts['oldpage'],$text,$sum);
         }
-        // show error messages
-        if (count($this->errors)>0) {
+        // show messages
+        if ($this->errors) {
             foreach ($this->errors as $error) msg( $error, -1 );
         }
-        // display form and table
-        $data = array( rp_newpage => $newpage, rp_summary => $summary );
-        $this->_print_form($data);
-    }
-
-    function _rename_page_work($oldpage, $newpage, $summary) {
-        // make new ns folder
-        $newmetadir = dirname(metaFN($newpage,'.txt'));
-        $newatticdir = dirname(wikiFN($newpage,'1'));
-        if (!io_mkdir_p($newmetadir)) return false;
-        if (!io_mkdir_p($newatticdir)) return false;
-        $oldpagebase = noNS($oldpage);
-        $newpagebase = noNS($newpage);
-        // move meta and attic
-        $oldmetas = metaFiles($oldpage);
-        foreach ($oldmetas as $fold ) {
-            $ext = end(explode( $oldpagebase, $fold ));
-            if ($ext == '.meta' || $ext == '.indexed') continue;
-            $fnew = $newmetadir.'/'.$newpagebase.$ext;
-            if (@file_exists($fnew)) {
-                $this->errors[] = sprintf( $this->getLang('rp_msg_new_hx_exist'), $newpage );
-                return false;
-            }
-            $tasks[] = array($fold,$fnew);
-        }
-        $oldattics = glob(wikiFN($oldpage,'*'));
-        foreach ($oldattics as $fold ) {
-            $ext = end(explode( $oldpagebase, $fold ));
-            $fnew = $newatticdir.'/'.$newpagebase.$ext;
-            if (@file_exists($fnew)) {
-                $this->errors[] = sprintf( $this->getLang('rp_msg_new_hx_exist'), $newpage );
-                return false;
-            }
-            $tasks[] = array($fold,$fnew);
-        }
-        foreach ($tasks as $task) rename($task[0],$task[1]);
-        // save to newpage
-        $text = rawWiki($oldpage);
-        if ($summary)
-            $sum = sprintf( $this->getLang('rp_newsummaryx'), $oldpage, $newpage, $summary );
-        else
-            $sum = sprintf( $this->getLang('rp_newsummary'), $oldpage, $newpage );
-        saveWikiText($newpage,$text,$sum);
-        // recreate old page
-        $text = $this->getConf('redirecttext');
-        if (!$text) $text = $this->getLang('redirecttext');
-        $text = str_replace( '@ID@', $newpage, $text );
-        if ($summary)
-            $sum = sprintf( $this->getLang('rp_oldsummaryx'), $oldpage, $newpage, $summary );
-        else
-            $sum = sprintf( $this->getLang('rp_oldsummary'), $oldpage, $newpage );
-        @unlink(wikiFN($oldpage));  // remove old page file so no additional history
-        saveWikiText($oldpage,$text,$sum);
-        // show messages
-        if (!$this->errors) {
-            $msg = sprintf( $this->getLang('rp_msg_success'), $oldpage, $newpage );
+        else {
+            $msg = sprintf( $this->getLang('rp_msg_success'), $opts['oldpage'], $opts['newpage'] );
             msg( $msg, 1 );
         }
-        return true;
+        // display form and table
+        $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'] );
+        $this->_print_form($data);
+    }
+    
+    function _apply_moves(&$opts) {
+        foreach ($opts['oldfiles'] as $i => $oldfile) {
+            $newfile = $opts['newfiles'][$i];
+            $newdir = dirname($newfile);
+            if (!@io_mkdir_p($newdir)) {
+                $this->errors[] = sprintf( $this->getLang('rp_msg_file_fail'), $newdir);
+                continue;
+            }
+            @io_rename($oldfile, $newfile) or $this->errors[] = sprintf( $this->getLang('rp_msg_file_fail'), $oldfile);
+        }
     }
 
-    function _delete_page($oldpage, $mode, $summary) {
+    function _delete_page(&$opts) {
         // check old page
-        if (!$oldpage) {
+        if (!$opts['oldpage']) {
             $this->errors[] = $this->getLang('dp_msg_old_empty');
-        } else if (!$this->_auth_can_delete($oldpage)) {
-            $this->errors[] = sprintf( $this->getLang('dp_msg_auth'), $oldpage );
+        } else if (!$this->_auth_can_delete($opts['oldpage'])) {
+            $this->errors[] = sprintf( $this->getLang('dp_msg_auth'), $opts['oldpage'] );
         }
         // if no error do delete
-        if (count($this->errors)==0) {
-            switch ($mode) {
-                case 1:
-                    $this->_delete_page_purge($oldpage, $summary);
-                    break;
-                case 0:
-                default:
-                    $this->_delete_page_delete($oldpage, $summary);
-                    break;
+        if (!$this->errors) {
+            // save to old page, to pure correlation with other pages
+            if ($opts['summary']) 
+                $sum = sprintf( $this->getLang('dp_oldsummaryx'), $opts['summary'] );
+            else 
+                $sum = sprintf( $this->getLang('dp_oldsummary') );
+            if (page_exists($opts['oldpage']))
+                saveWikiText($opts['oldpage'],'',$sum);
+            else
+                addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $sum );
+            // try to locate deletes
+            if (!$this->errors) {
+                $opts['oldname'] = noNS($opts['oldpage']);
+                $opts['oldns'] = getNS($opts['oldpage']);
+                if ($opts['oldns']) $opts['oldns'] .= '/';
+                if (!$opts['purge']) $exclude = '/(\.changes)$/';
+                $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/', $exclude );
+                $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
+            }
+            // delete meta and attic
+            $this->_apply_deletes($opts);
+            // trim change log
+            if (!$opts['purge']) {
+                $file = metaFN($opts['oldpage'],'.changes');
+                $change = end(file($file,FILE_SKIP_EMPTY_LINES));
+                @file_put_contents( $file, $change ) or $this->errors[] = sprintf( $this->getLang('dp_msg_file_fail'), $file);
             }
         }
-        // show error messages
-        if (count($this->errors)>0) {
+        // show messages
+        if ($this->errors) {
             foreach ($this->errors as $error) msg( $error, -1 );
         }
+        else {
+            $act = $opts['purge'] ? 'dp_msg_p_success' : 'dp_msg_d_success';
+            $msg = sprintf( $this->getLang($act), $opts['oldpage'] );
+            msg( $msg, 1 );
+        }
         // display form and table
-        $data = array( dp_mode => $mode, dp_summary => $summary );
+        $data = array( dp_purge => $opts['purge'], dp_summary => $opts['summary'] );
         $this->_print_form($data);
     }
-
-    function _delete_page_delete($oldpage, $summary) {
-        if ($summary) 
-            $sum = sprintf( $this->getLang('dp_oldsummaryx'), $summary );
-        else 
-            $sum = sprintf( $this->getLang('dp_oldsummary') );
-        $err = $this->_delete_page_delete_work($oldpage, $sum);
-        // show messages
-        if (!$err) {
-            $msg = sprintf( $this->getLang('dp_msg_d_success'), $oldpage );
-            msg( $msg, 1 );
+    
+    function _apply_deletes(&$opts) {
+        foreach ($opts['oldfiles'] as $oldfile) {
+            @unlink($oldfile) or $this->errors[] = sprintf( $this->getLang('dp_msg_file_fail'), $oldfile );
         }
-    }
-
-    function _delete_page_purge($oldpage, $summary) {
-        if ($summary) 
-            $sum = sprintf( $this->getLang('dp_oldsummaryx'), $summary );
-        else 
-            $sum = sprintf( $this->getLang('dp_oldsummary') );
-        $err = $this->_delete_page_delete_work($oldpage, $sum, true);
-        // show messages
-        if (!$err) {
-            $msg = sprintf( $this->getLang('dp_msg_p_success'), $oldpage );
-            msg( $msg, 1 );
-        }
-    }
-
-    function _delete_page_delete_work($oldpage, $sum, $purge=false) {
-        $oldpagebase = noNS($oldpage);
-        // pure correlation with other pages
-        if (page_exists($oldpage))
-            saveWikiText($oldpage,'',$sum);
-        else
-            addLogEntry( null, $oldpage, DOKU_CHANGE_TYPE_DELETE, $sum );
-        // delete meta and attic
-        $oldmetas = metaFiles($oldpage);
-        foreach ($oldmetas as $file ) {
-            $ext = end(explode( $oldpagebase, $file ));
-            if ($ext=='.changes' && !$purge) {
-                $change = end(file($file,FILE_SKIP_EMPTY_LINES));
-                file_put_contents( $file, $change ) or $err++;
-            }
-            else if ($ext=='.mlist' && !$purge) {} // keep subscriber list
-            else unlink($file) or $err++;
-        }
-        $oldattics = glob(wikiFN($oldpage,'*'));
-        foreach ($oldattics as $file ) {
-            unlink($file) or $err++;
-        }
-        if ($err) {
-            $this->errors[] = sprintf( $this->getLang('dp_msg_unclear'), $oldpage);
-        }
-        return $err;
     }
 
     function _print_form($data=null) {
         global $ID, $lang;
-        $sel = ' selected="selected"';
+        $chk = ' checked="checked"';
 ?>
 <h1><?php echo sprintf( $this->getLang('title'), $ID); ?></h1>
 <div id="config__manager">
@@ -296,17 +285,12 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         <input type="hidden" name="oldpage" value="<?php echo $ID; ?>" />
         <table class="inline">
             <tr>
-                <td class="label"><?php echo $this->getLang('dp_mode'); ?></td>
-                <td class="value">
-                    <select name="mode">
-                        <option value="0"<?php if (!$data['dp_mode']) echo $sel;?>><?php echo $this->getLang('dp_mode_delete'); ?></option>
-                        <option value="1"<?php if ($data['dp_mode']==1) echo $sel;?>><?php echo $this->getLang('dp_mode_purge'); ?></option>
-                    </select>
-                </td>
-            </tr>
-            <tr>
                 <td class="label"><?php echo $this->getLang('dp_summary'); ?></td>
                 <td class="value"><input class="edit" type="input" name="summary" value="<?php echo $data['dp_summary']; ?>" /></td>
+            </tr>
+            <tr>
+                <td class="label"><?php echo $this->getLang('dp_purge'); ?></td>
+                <td class="value"><input type="checkbox" name="dp_purge" value="1"<?php if ($data['dp_purge']) echo $chk; ?> /></td>
             </tr>
         </table>
         <p>
