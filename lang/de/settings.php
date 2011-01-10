@@ -6,4 +6,5 @@
  * @author:     vehtoh <kontakt[at]vehtoh[dot]de>
  */
 
-$lang['redirecttext']    = 'Nach der Seitenverschiebung blieb noch Text übrig. (leere Seite als Standartseite)';
+$lang['redirecttext']    = 'Nach der Seitenverschiebung blieb noch Text Ã¼brig. (Leere Seite als Standardseite)';
+
