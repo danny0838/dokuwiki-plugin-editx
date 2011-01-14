@@ -3,4 +3,7 @@
  * Options for editx plugin
  */
 
-$conf['redirecttext'] = '';
+$conf['user_rename']    = '';
+$conf['user_rename_nr'] = '';
+$conf['user_delete']    = '';
+$conf['redirecttext']   = '';

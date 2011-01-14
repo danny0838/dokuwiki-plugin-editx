@@ -22,9 +22,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
      * main hooks
      */ 
     function _prepend_to_edit(&$event, $param) {
-        if ($event->data != 'edit') return;
-        if (auth_quickaclcheck($ID)<AUTH_EDIT) return;
         global $ID;
+        if ($event->data != 'edit') return;
+        if (!$this->_auth_check_all($ID)) return;
         $link = html_wikilink($ID.'?do=editx');
         $intro = $this->locale_xhtml('intro');
         $intro = str_replace( '@LINK@', $link, $intro );
@@ -45,6 +45,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $opts['oldpage'] = cleanID($_REQUEST['oldpage']);
                 $opts['newpage'] = cleanID($_REQUEST['newpage']);
                 $opts['summary'] = $_REQUEST['summary'];
+                $opts['nr'] = $_REQUEST['rp_nr'];
                 $this->_rename_page($opts);
                 break;
             case 'delete':
@@ -62,18 +63,65 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     /**
      * helper functions
      */
+    function _auth_check_list($list) {
+        global $conf;
+        global $USERINFO;
+
+        if(!$conf['useacl']) return true; //no ACL - then no checks
+
+        $allowed = explode(',',$list);
+        $allowed = array_map('trim', $allowed);
+        $allowed = array_unique($allowed);
+        $allowed = array_filter($allowed);
+
+        if(!count($allowed)) return true; //no restrictions
+
+        $user   = $_SERVER['REMOTE_USER'];
+        $groups = (array) $USERINFO['grps'];
+
+        if(in_array($user,$allowed)) return true; //user explicitly mentioned
+
+        //check group memberships
+        foreach($groups as $group){
+            if(in_array('@'.$group,$allowed)) return true;
+        }
+
+        //still here? no access!
+        return false;
+    }
+    
+    function _auth_check_all($id) {
+        return $this->_auth_can_rename($id) ||
+            $this->_auth_can_delete($id);
+    }
+    
     function _auth_can_rename($id) {
-        return auth_quickaclcheck($id)>=AUTH_EDIT;
+        static $cache = null;
+        if (!$cache[$id]) {
+            $cache[$id] = auth_quickaclcheck($id)>=AUTH_EDIT &&
+                $this->_auth_check_list($this->getConf('user_rename'));
+        }
+        return $cache[$id];
     }
 
     function _auth_can_rename_nr($id) {
-        return auth_quickaclcheck($id)>=AUTH_DELETE;
+        static $cache = null;
+        if (!$cache[$id]) {
+            $cache[$id] = auth_quickaclcheck($id)>=AUTH_DELETE &&
+                $this->_auth_check_list($this->getConf('user_rename_nr'));
+        }
+        return $cache[$id];
     }
 
     function _auth_can_delete($id) {
-        return auth_quickaclcheck($id)>=AUTH_DELETE;
+        static $cache = null;
+        if (!$cache[$id]) {
+            $cache[$id] = auth_quickaclcheck($id)>=AUTH_DELETE &&
+                $this->_auth_check_list($this->getConf('user_delete'));
+        }
+        return $cache[$id];
     }
-    
+
     function _locate_filepairs(&$opts, $dir, $regex ){
         global $conf;
         $oldpath = $conf[$dir].'/'.str_replace(':','/',$opts['oldns']);
@@ -119,6 +167,38 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         }
     }
 
+    function _custom_delete_page($id, $summary) {
+        global $ID, $INFO, $conf;
+        // mark as nonexist to prevent indexerWebBug
+        if ($id==$ID) $INFO['exists'] = 0;
+        // delete page, meta and attic
+        $file = wikiFN($id);
+        $old = @filemtime($file); // from page
+        if (file_exists($file)) unlink($file);
+        $opts['oldname'] = noNS($id);
+        $opts['oldns'] = getNS($id);
+        if ($opts['oldns']) $opts['oldns'] .= '/';
+        $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!mlist)\w*?$/' );
+        $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
+        $this->_apply_deletes($opts);
+        io_sweepNS($id, 'datadir');
+        io_sweepNS($id, 'metadir');
+        io_sweepNS($id, 'olddir');
+        // send notify mails
+        notify($id,'admin',$old,$summary);
+        notify($id,'subscribers',$old,$summary);
+        // update the purgefile (timestamp of the last time anything within the wiki was changed)
+        io_saveFile($conf['cachedir'].'/purgefile',time());
+        // if useheading is enabled, purge the cache of all linking pages
+        if(useHeading('content')){
+            $pages = ft_backlinks($id);
+            foreach ($pages as $page) {
+                $cache = new cache_renderer($page, wikiFN($page), 'xhtml');
+                $cache->removeCache();
+            }
+        }
+    }
+
     /**
      * main functions
      */
@@ -133,6 +213,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         } else if (checklock($opts['oldpage'])) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $opts['oldpage'] );
         }
+        // check noredirect
+        if ($opts['nr'] && !$this->_auth_can_rename_nr($opts['oldpage']))
+            $this->errors[] = $this->getLang('rp_msg_auth_nr');
         // check new page
         if (!$opts['newpage']) {
             $this->errors[] = $this->getLang('rp_msg_new_empty');
@@ -152,7 +235,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $opts['newns'] = getNS($opts['newpage']);
             if ($opts['oldns']) $opts['oldns'] .= '/';
             if ($opts['newns']) $opts['newns'] .= '/';
-            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!meta|indexed)\w*?$/' );
+            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!mlist|meta|indexed)\w*?$/' );
             $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
         }
         // if no error do rename
@@ -162,19 +245,24 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             // save to newpage
             $text = rawWiki($opts['oldpage']);
             if ($opts['summary'])
-                $sum = sprintf( $this->getLang('rp_newsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
+                $summary = sprintf( $this->getLang('rp_newsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
             else
-                $sum = sprintf( $this->getLang('rp_newsummary'), $opts['oldpage'], $opts['newpage'] );
-            saveWikiText($opts['newpage'],$text,$sum);
-            // recreate old page
-            $text = $this->getConf('redirecttext');
-            if (!$text) $text = $this->getLang('redirecttext');
-            $text = str_replace( '@ID@', $opts['newpage'], $text );
-            $sum = $opts['summary'] ?
+                $summary = sprintf( $this->getLang('rp_newsummary'), $opts['oldpage'], $opts['newpage'] );
+            saveWikiText($opts['newpage'],$text,$summary);
+            // purge or recreate old page
+            $summary = $opts['summary'] ?
                 sprintf( $this->getLang('rp_oldsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] ) :
                 sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
-            @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
-            saveWikiText($opts['oldpage'],$text,$sum);
+            if ($opts['nr']) {
+                $this->_custom_delete_page( $opts['oldpage'], $summary );
+            }
+            else {
+                $text = $this->getConf('redirecttext');
+                if (!$text) $text = $this->getLang('redirecttext');
+                $text = str_replace( '@ID@', $opts['newpage'], $text );
+                @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
+                saveWikiText($opts['oldpage'],$text,$summary);
+            }
         }
         // show messages
         if ($this->errors) {
@@ -185,7 +273,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             msg( $msg, 1 );
         }
         // display form and table
-        $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'] );
+        $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'], rp_nr => $opts['rp_nr'] );
         $this->_print_form($data);
     }
 
@@ -198,32 +286,20 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         }
         // if no error do delete
         if (!$this->errors) {
-            // delete page, meta and attic
-            $oldpage = wikiFN($opts['oldpage']);
-            if (file_exists($oldpage)) unlink($oldpage);
-            $opts['oldname'] = noNS($opts['oldpage']);
-            $opts['oldns'] = getNS($opts['oldpage']);
-            if ($opts['oldns']) $opts['oldns'] .= '/';
-            $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.\w*?$/' );
-            $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
-            $this->_apply_deletes($opts);
-            io_sweepNS($opts['oldpage'], 'datadir');
-            io_sweepNS($opts['oldpage'], 'metadir');
-            io_sweepNS($opts['oldpage'], 'olddir');
-            // write change log
-            $sum = $opts['summary'] ? 
+            $summary = $opts['summary'] ? 
                 sprintf( $this->getLang('dp_oldsummaryx'), $opts['summary'] ) :
                 $this->getLang('dp_oldsummary');
-            addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $sum ); // also writes to global changes
-            if ($opts['purge']) unlink(metaFN($opts['oldpage'],'.changes'));
+            $this->_custom_delete_page( $opts['oldpage'], $summary );
+            // write change log afterwards, or it would be deleted
+            addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $summary ); // also writes to global changes
+            if ($opts['purge']) unlink(metaFN($opts['oldpage'],'.changes')); // purge page changes
         }
         // show messages
         if ($this->errors) {
             foreach ($this->errors as $error) msg( $error, -1 );
         }
         else {
-            $act = $opts['purge'] ? 'dp_msg_p_success' : 'dp_msg_d_success';
-            $msg = sprintf( $this->getLang($act), $opts['oldpage'] );
+            $msg = sprintf( $this->getLang('dp_msg_success'), $opts['oldpage'] );
             msg( $msg, 1 );
         }
         // display form and table
@@ -255,6 +331,16 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 <td class="label"><?php echo $this->getLang('rp_summary'); ?></td>
                 <td class="value"><input class="edit" type="input" name="summary" value="<?php echo $data['rp_summary']; ?>" /></td>
             </tr>
+<?php 
+        if ($this->_auth_can_rename_nr($ID)) {
+?>
+            <tr>
+                <td class="label"><?php echo $this->getLang('rp_nr'); ?></td>
+                <td class="value"><input type="checkbox" name="rp_nr" value="1"<?php if ($data['rp_nr']) echo $chk; ?> /></td>
+            </tr>
+<?php
+    }
+?>
         </table>
         <p>
             <input type="submit" class="button" value="<?php echo $lang['btn_save']; ?>" />
