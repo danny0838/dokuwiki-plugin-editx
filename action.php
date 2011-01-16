@@ -255,6 +255,9 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
             if ($opts['nr']) {
                 $this->_custom_delete_page( $opts['oldpage'], $summary );
+                // write change log afterwards, or it would be deleted
+                addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $summary ); // also writes to global changes
+                unlink(metaFN($opts['oldpage'],'.changes')); // purge page changes
             }
             else {
                 $text = $this->getConf('redirecttext');
