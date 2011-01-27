@@ -32,6 +32,7 @@ $lang['rp_msg_success']     = 'Page %s successfully renamed to %s.';
 // delete page = dp
 $lang['dp_title']           = 'Page Deletion';
 $lang['dp_purge']           = 'No delete history';
+$lang['dp_summary']         = 'Reason';
 
 $lang['dp_oldsummary']      = 'Deleted';
 $lang['dp_oldsummaryx']     = 'Deleted (%s)';
