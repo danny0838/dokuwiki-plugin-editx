@@ -151,7 +151,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         }
         return false;
     }
-    
+
     function _apply_moves(&$opts) {
         foreach ($opts['oldfiles'] as $i => $oldfile) {
             $newfile = $opts['newfiles'][$i];
@@ -160,11 +160,17 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             io_rename($oldfile, $newfile);
         }
     }
-    
+
     function _apply_deletes(&$opts) {
         foreach ($opts['oldfiles'] as $oldfile) {
             unlink($oldfile);
         }
+    }
+
+    function _FN($id) {
+        $id = str_replace(':','/',$id);
+        $id = utf8_encodeFN($id);
+        return $id;
     }
 
     function _custom_delete_page($id, $summary) {
@@ -175,8 +181,8 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         $file = wikiFN($id);
         $old = @filemtime($file); // from page
         if (file_exists($file)) unlink($file);
-        $opts['oldname'] = noNS($id);
-        $opts['oldns'] = getNS($id);
+        $opts['oldname'] = $this->_FN(noNS($id));
+        $opts['oldns'] = $this->_FN(getNS($id));
         if ($opts['oldns']) $opts['oldns'] .= '/';
         $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!mlist)\w*?$/' );
         $this->_locate_filepairs( $opts, 'olddir', '/^'.$opts['oldname'].'\.\d{10}\.txt(\.gz|\.bz2)?$/' );
@@ -229,10 +235,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         // try to locate moves
         if (!$this->errors) {
             $opts['move'] = true;
-            $opts['oldname'] = noNS($opts['oldpage']);
-            $opts['newname'] = noNS($opts['newpage']);
-            $opts['oldns'] = getNS($opts['oldpage']);
-            $opts['newns'] = getNS($opts['newpage']);
+            $opts['oldname'] = $this->_FN(noNS($opts['oldpage']));
+            $opts['newname'] = $this->_FN(noNS($opts['newpage']));
+            $opts['oldns'] = $this->_FN(getNS($opts['oldpage']));
+            $opts['newns'] = $this->_FN(getNS($opts['newpage']));
             if ($opts['oldns']) $opts['oldns'] .= '/';
             if ($opts['newns']) $opts['newns'] .= '/';
             $this->_locate_filepairs( $opts, 'metadir', '/^'.$opts['oldname'].'\.(?!mlist|meta|indexed)\w*?$/' );
