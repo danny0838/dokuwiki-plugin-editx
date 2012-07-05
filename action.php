@@ -46,12 +46,14 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $opts['newpage'] = cleanID($_REQUEST['newpage']);
                 $opts['summary'] = $_REQUEST['summary'];
                 $opts['nr'] = $_REQUEST['rp_nr'];
+                $opts['confirm'] = $_REQUEST['rp_confirm'];
                 $this->_rename_page($opts);
                 break;
             case 'delete':
                 $opts['oldpage'] = cleanID($_REQUEST['oldpage']);
                 $opts['summary'] = $_REQUEST['summary'];
                 $opts['purge'] = $_REQUEST['dp_purge'];
+                $opts['confirm'] = $_REQUEST['dp_confirm'];
                 $this->_delete_page($opts);
                 break;
             default:
@@ -209,6 +211,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
      * main functions
      */
     function _rename_page(&$opts) {
+        // check confirmation
+        if (!$opts['confirm']) {
+            $this->errors[] = $this->getLang('rp_msg_unconfirmed');
+        }
         // check old page
         if (!$opts['oldpage']) {
             $this->errors[] = $this->getLang('rp_msg_old_empty');
@@ -287,6 +293,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     }
 
     function _delete_page(&$opts) {
+        // check confirm
+        if (!$opts['confirm']) {
+            $this->errors[] = $this->getLang('dp_msg_unconfirmed');
+        }
         // check old page
         if (!$opts['oldpage']) {
             $this->errors[] = $this->getLang('dp_msg_old_empty');
@@ -350,6 +360,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
 <?php
     }
 ?>
+            <tr>
+                <td class="label"><?php echo $this->getLang('rp_confirm'); ?></td>
+                <td class="value"><input type="checkbox" name="rp_confirm" value="1" /></td>
+            </tr>
         </table>
         <p>
             <input type="submit" class="button" value="<?php echo $lang['btn_save']; ?>" />
@@ -375,6 +389,10 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             <tr>
                 <td class="label"><?php echo $this->getLang('dp_purge'); ?></td>
                 <td class="value"><input type="checkbox" name="dp_purge" value="1"<?php if ($data['dp_purge']) echo $chk; ?> /></td>
+            </tr>
+            <tr>
+                <td class="label"><?php echo $this->getLang('dp_confirm'); ?></td>
+                <td class="value"><input type="checkbox" name="dp_confirm" value="1" /></td>
             </tr>
         </table>
         <p>
