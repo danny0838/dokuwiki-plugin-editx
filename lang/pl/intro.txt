@@ -1,0 +1,5 @@
+====== Zarządzanie stroną ======
+
+Jeżeli chcesz zarządzać tą stroną, np. zmienić jej nazwę, przejdź tutaj: @LINK@.
+
+====== Edytuj tę stronę ======
