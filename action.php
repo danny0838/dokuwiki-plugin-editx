@@ -1,7 +1,7 @@
 <?php
 /**
  * @license    GPL 2 (http://www.gnu.org/licenses/gpl.html)
- * @author     Danny Lin <danny0838@pchome.com.tw>
+ * @author     Danny Lin <danny.0838@gmail.com>
  */
 
 // must be run within Dokuwiki
