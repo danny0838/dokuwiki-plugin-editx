@@ -1,5 +1,3 @@
-====== Pagina beheer ======
+====== Paginabeheer ======
 
-Als u een pagina wilt verplaatsen of verwijderen, klik hier: @LINK@.
-
-====== Pagina aanpassen ======
+Gebruik @LINK@ om deze pagina te verplaatsen of verwijderen.

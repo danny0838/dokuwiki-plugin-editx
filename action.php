@@ -6,6 +6,9 @@
 
 // must be run within Dokuwiki
 if(!defined('DOKU_INC')) die();
+if (!defined('DOKU_PLUGIN')) define('DOKU_PLUGIN', DOKU_INC . 'lib/plugins/');
+require_once (DOKU_PLUGIN . 'action.php');
+require_once(DOKU_INC.'inc/fulltext.php');
 
 class action_plugin_editx extends DokuWiki_Action_Plugin {
 
@@ -13,7 +16,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
      * register the eventhandlers
      */
     function register(&$contr) {
-        $contr->register_hook('TPL_ACT_RENDER', 'BEFORE', $this, '_prepend_to_edit', array());
+        $contr->register_hook('TPL_ACT_RENDER', 'AFTER', $this, '_append_to_edit', array());
         $contr->register_hook('ACTION_ACT_PREPROCESS', 'BEFORE', $this, '_handle_act', array());
         $contr->register_hook('TPL_ACT_UNKNOWN', 'BEFORE', $this, '_handle_tpl_act', array());
     }
@@ -21,11 +24,11 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
     /**
      * main hooks
      */ 
-    function _prepend_to_edit(&$event, $param) {
+    function _append_to_edit(&$event, $param) {
         global $ID;
         if ($event->data != 'edit') return;
         if (!$this->_auth_check_all($ID)) return;
-        $link = html_wikilink($ID.'?do=editx');
+        $link = sprintf('<a href="%s" class="action editx" rel="nofollow">%s</a>', wl($ID,'do=editx'), $this->getLang('pagemanagement'));
         $intro = $this->locale_xhtml('intro');
         $intro = str_replace( '@LINK@', $link, $intro );
         print $intro;
@@ -45,7 +48,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $opts['oldpage'] = cleanID($_REQUEST['oldpage']);
                 $opts['newpage'] = cleanID($_REQUEST['newpage']);
                 $opts['summary'] = $_REQUEST['summary'];
-                $opts['nr'] = $_REQUEST['rp_nr'];
+                $opts['rp_nr'] = $_REQUEST['rp_nr'];
                 $opts['confirm'] = $_REQUEST['rp_confirm'];
                 $this->_rename_page($opts);
                 break;
@@ -141,7 +144,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                         $newfilebase = str_replace($opts['oldname'], $opts['newname'], $file);
                         $newfile = $newpath.$newfilebase;
                         if (@file_exists($newfile)) {
-                            $this->errors[] = sprintf( $this->getLang('rp_msg_file_conflict'), $newfilebase );
+                            $this->errors[] = sprintf( $this->getLang('rp_msg_file_conflict'), $newfilebase, wl($opts['newname'], 'do=revisions'), wl($opts['newname'], 'do=editx') );
                             return false;
                         }
                         $opts['newfiles'][] = $newfile;
@@ -226,13 +229,13 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
             $this->errors[] = sprintf( $this->getLang('rp_msg_locked'), $opts['oldpage'] );
         }
         // check noredirect
-        if ($opts['nr'] && !$this->_auth_can_rename_nr($opts['oldpage']))
+        if ($opts['rp_nr'] && !$this->_auth_can_rename_nr($opts['oldpage']))
             $this->errors[] = $this->getLang('rp_msg_auth_nr');
         // check new page
         if (!$opts['newpage']) {
             $this->errors[] = $this->getLang('rp_msg_new_empty');
         } else if (page_exists($opts['newpage'])) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), $opts['newpage'] );
+            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), wl($opts['newpage']),$opts['newpage'] );
         } else if (!$this->_auth_can_rename($opts['newpage'])) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $opts['newpage'] );
         } else if (checklock($opts['newpage'])) {
@@ -260,12 +263,14 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $summary = sprintf( $this->getLang('rp_newsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
             else
                 $summary = sprintf( $this->getLang('rp_newsummary'), $opts['oldpage'], $opts['newpage'] );
+            $text = $this->_update_links($opts['oldpage'], $opts['newpage'], $text);
+
             saveWikiText($opts['newpage'],$text,$summary);
             // purge or recreate old page
             $summary = $opts['summary'] ?
                 sprintf( $this->getLang('rp_oldsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] ) :
                 sprintf( $this->getLang('rp_oldsummary'), $opts['oldpage'], $opts['newpage'] );
-            if ($opts['nr']) {
+            if ($opts['rp_nr']) {
                 $this->_custom_delete_page( $opts['oldpage'], $summary );
                 // write change log afterwards, or it would be deleted
                 addLogEntry( null, $opts['oldpage'], DOKU_CHANGE_TYPE_DELETE, $summary ); // also writes to global changes
@@ -278,18 +283,72 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
                 saveWikiText($opts['oldpage'],$text,$summary);
             }
+            $this->_update_backlinks($opts['oldpage'], $opts['newpage'], $summary);
         }
         // show messages
         if ($this->errors) {
             foreach ($this->errors as $error) msg( $error, -1 );
         }
         else {
-            $msg = sprintf( $this->getLang('rp_msg_success'), $opts['oldpage'], $opts['newpage'] );
+            $msg = sprintf( $this->getLang('rp_msg_success'), $opts['oldpage'], '<a href="'. wl($opts['newpage']) . '">'.$opts['newpage'].'</a>' );
             msg( $msg, 1 );
         }
         // display form and table
         $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'], rp_nr => $opts['rp_nr'] );
         $this->_print_form($data);
+    }
+
+    function _update_links($oldpage, $newpage, $text){
+        $namespace_old = getNS($oldpage) ? getNS($oldpage) : "";
+        $namespace_new = getNS($newpage) ? getNS($newpage) : "";
+
+        // Fix links on the new page
+        if($namespace_old != $namespace_new){
+            // extend all relative urls with namespace
+            $pattern = '/\[\[([^:]*?)(\|(.*?))?]]/';
+            $replace = '[[' . $namespace_old . ':$1$2]]';
+            $text = preg_replace($pattern, $replace, $text);
+
+            // change namespace of self urls
+            $old = "[[".$namespace_old.":" . noNS($oldpage);
+            $old2 = "[[:".$namespace_old.":" . noNS($oldpage);
+            $new = "[[:".$namespace_new.":" . noNS($newpage);
+            $text = str_replace(array($old, $old2), $new, $text);
+        }
+        return $text;
+    }
+
+    function _update_backlinks($oldpage, $newpage, $summary){
+        $namespace_old = getNS($oldpage) ? getNS($oldpage) : "";
+        $namespace_new = getNS($newpage) ? getNS($newpage) : "";
+
+        // Fix backlinks
+        $pages = ft_backlinks($oldpage);
+        foreach($pages as $idx){
+            // load page
+            $text = rawWiki($idx);
+
+            // update references
+            $namespace_idx = getNS($idx) ? getNS($idx) : "";
+            $old = "[[". $namespace_old . ":" . noNS($oldpage);
+            $old2 = "[[:". $namespace_old . ":" . noNS($oldpage);
+            $old_relative = "[[". noNS($oldpage);
+            $new = "[[". $namespace_new . ":" . noNS($newpage);
+            $count = 0;
+            $text = str_replace(array($old, $old2), $new, $text, $count);
+
+            // resolve possible relative pagelinks
+            if($namespace_old == $namespace_idx){
+                $count_relative = 0;
+                $text = str_replace($old_relative, $new, $text, $count_relative);
+                $count += $count_relative;
+            }
+
+            // save page if changes were made
+            if($count){
+                saveWikiText($idx, $text, $summary);
+            }
+        }
     }
 
     function _delete_page(&$opts) {
