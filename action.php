@@ -263,6 +263,8 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 $summary = sprintf( $this->getLang('rp_newsummaryx'), $opts['oldpage'], $opts['newpage'], $opts['summary'] );
             else
                 $summary = sprintf( $this->getLang('rp_newsummary'), $opts['oldpage'], $opts['newpage'] );
+            $text = $this->_update_links($opts['oldpage'], $opts['newpage'], $text);
+
             saveWikiText($opts['newpage'],$text,$summary);
             // purge or recreate old page
             $summary = $opts['summary'] ?
@@ -281,6 +283,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                 @unlink(wikiFN($opts['oldpage']));  // remove old page file so no additional history
                 saveWikiText($opts['oldpage'],$text,$summary);
             }
+            $this->_update_backlinks($opts['oldpage'], $opts['newpage'], $summary);
         }
         // show messages
         if ($this->errors) {
@@ -293,6 +296,59 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         // display form and table
         $data = array( rp_newpage => $opts['newpage'], rp_summary => $opts['summary'], rp_nr => $opts['rp_nr'] );
         $this->_print_form($data);
+    }
+
+    function _update_links($oldpage, $newpage, $text){
+        $namespace_old = getNS($oldpage) ? getNS($oldpage) : "";
+        $namespace_new = getNS($newpage) ? getNS($newpage) : "";
+
+        // Fix links on the new page
+        if($namespace_old != $namespace_new){
+            // extend all relative urls with namespace
+            $pattern = '/\[\[([^:]*?)(\|(.*?))?]]/';
+            $replace = '[[' . $namespace_old . ':$1$2]]';
+            $text = preg_replace($pattern, $replace, $text);
+
+            // change namespace of self urls
+            $old = "[[".$namespace_old.":" . noNS($oldpage);
+            $old2 = "[[:".$namespace_old.":" . noNS($oldpage);
+            $new = "[[:".$namespace_new.":" . noNS($newpage);
+            $text = str_replace(array($old, $old2), $new, $text);
+        }
+        return $text;
+    }
+
+    function _update_backlinks($oldpage, $newpage, $summary){
+        $namespace_old = getNS($oldpage) ? getNS($oldpage) : "";
+        $namespace_new = getNS($newpage) ? getNS($newpage) : "";
+
+        // Fix backlinks
+        $pages = ft_backlinks($oldpage);
+        foreach($pages as $idx){
+            // load page
+            $text = rawWiki($idx);
+
+            // update references
+            $namespace_idx = getNS($idx) ? getNS($idx) : "";
+            $old = "[[". $namespace_old . ":" . noNS($oldpage);
+            $old2 = "[[:". $namespace_old . ":" . noNS($oldpage);
+            $old_relative = "[[". noNS($oldpage);
+            $new = "[[". $namespace_new . ":" . noNS($newpage);
+            $count = 0;
+            $text = str_replace(array($old, $old2), $new, $text, $count);
+
+            // resolve possible relative pagelinks
+            if($namespace_old == $namespace_idx){
+                $count_relative = 0;
+                $text = str_replace($old_relative, $new, $text, $count_relative);
+                $count += $count_relative;
+            }
+
+            // save page if changes were made
+            if($count){
+                saveWikiText($idx, $text, $summary);
+            }
+        }
     }
 
     function _delete_page(&$opts) {
