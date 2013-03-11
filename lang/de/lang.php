@@ -26,7 +26,7 @@ $lang['rp_msg_new_exist']   = 'Die neue Seite %S existiert bereits.';
 $lang['rp_msg_locked']      = 'Die Seite %s ist gesperrt.';
 $lang['rp_msg_auth']        = 'Sie haben nicht die erforderlichen Berechtigungen um die Seite %s zu bearbeiten.';
 $lang['rp_msg_auth_nr']     = 'Sie sind nicht berechtigt die Umleitung zu deaktivieren.';
-$lang['rp_msg_file_conflict'] = 'Es ist ein Konflikt mit der neuen Seite %s aufgetreten.';
+#$lang['rp_msg_file_conflict'] = 'Es ist ein Konflikt mit der neuen Seite %s aufgetreten.';
 $lang['rp_msg_success']     = 'Die Seite %s wurde in %s umbenannt.';
 
 // delete page = dp

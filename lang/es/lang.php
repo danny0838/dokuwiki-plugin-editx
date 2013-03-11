@@ -26,7 +26,7 @@ $lang['rp_msg_new_exist']   = 'La nueva página %s ya existe.';
 $lang['rp_msg_locked']      = 'La página %s está en estos momentos bloqueada.';
 $lang['rp_msg_auth']        = 'No estas autorizado para editar la página %s.';
 $lang['rp_msg_auth_nr']     = 'No estas autorizado para suprimir el enlace.';
-$lang['rp_msg_file_conflict'] = 'Ha ocurrido un error con el fichero de la página %s.';
+#$lang['rp_msg_file_conflict'] = 'Ha ocurrido un error con el fichero de la página %s.';
 $lang['rp_msg_success']     = 'La página %s se ha renombrado correctamente %s.';
 
 // delete page = dp

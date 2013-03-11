@@ -1,5 +1,3 @@
 ====== Page Management ======
 
 If you want to do a page management such as renaming, go here: @LINK@.
-
-====== Edit this page ======

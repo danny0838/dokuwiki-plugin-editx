@@ -30,7 +30,7 @@ $lang['rp_msg_new_hx_exist']= 'De nieuwe pagina %s heeft reeds een historie.';
 $lang['rp_msg_locked']      = 'Pagina %s is nu vergrendeld.';
 $lang['rp_msg_auth']        = 'U bent niet bevoegd om de volgende pagina te wijzigen: %s.';
 $lang['rp_msg_auth_nr']     = 'U bent niet bevoegd om de verwijzing weg te laten.';
-$lang['rp_msg_file_conflict'] = 'Er is een conflict ontstaan met het bestand %s van de nieuwe pagina. <a href="%s">Bekijk de eerdere revisies van deze pagina</a> of gebruik <a href="%s">Paginabeheer</a> om de historie van deze pagina te verwijderen.';
+#$lang['rp_msg_file_conflict'] = 'Er is een conflict ontstaan met het bestand %s van de nieuwe pagina. <a href="%s">Bekijk de eerdere revisies van deze pagina</a> of gebruik <a href="%s">Paginabeheer</a> om de historie van deze pagina te verwijderen.';
 $lang['rp_msg_success']     = 'Pagina %s succesvol verplaatst naar %s.';
  
 // delete page = dp

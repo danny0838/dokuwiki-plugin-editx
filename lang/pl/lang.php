@@ -26,7 +26,7 @@ $lang['rp_msg_new_exist']   = 'Strona o proponowanej nazwie %s już istnieje.';
 $lang['rp_msg_locked']      = 'Strona %s jest w tej chwili zablokowana.';
 $lang['rp_msg_auth']        = 'Nie masz uprawnień do zmiany %s.';
 $lang['rp_msg_auth_nr']     = 'Nie masz uprawnień, aby usunąć przekierowanie.';
-$lang['rp_msg_file_conflict'] = 'Wystąpił błąd związany z nową stroną %s.';
+#$lang['rp_msg_file_conflict'] = 'Wystąpił błąd związany z nową stroną %s.';
 $lang['rp_msg_success']     = 'Pomyślnie zmnieniono nazwę strony %s do %s.';
 
 // delete page = dp
