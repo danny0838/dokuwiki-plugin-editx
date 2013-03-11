@@ -3,7 +3,6 @@
  * Russian language file
  *
  * @license:    GPL 2 (http://www.gnu.org/licenses/gpl.html)
- * @author:     Danny Lin <danny0838[at]pchome[dot]com[dot]tw>
  *
  * Russian translation by hatifnatt
  */

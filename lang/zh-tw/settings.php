@@ -3,7 +3,6 @@
  * Traditional Chinese language file
  *
  * @license:    GPL 2 (http://www.gnu.org/licenses/gpl.html)
- * @author:     Danny Lin <danny0838[at]pchome[dot]com[dot]tw>
  */
 
 $lang['user_rename']     = '允許更改頁面名稱的群組或使用者 (逗號分隔)，空白代表全部允許。';

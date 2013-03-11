@@ -3,7 +3,6 @@
  * English language file
  *
  * @license:    GPL 2 (http://www.gnu.org/licenses/gpl.html)
- * @author:     Danny Lin <danny0838[at]pchome[dot]com[dot]tw>
  */
 
 $lang['user_rename']     = 'Grupo o usuarios que pueden renombrar una página (comma seperated). Dejar en blanco para permitir todos.';
