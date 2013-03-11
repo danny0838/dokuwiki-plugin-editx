@@ -7,6 +7,7 @@
 
 $lang['title']              = '%s 管理';
 $lang['redirecttext']       = '本頁已重定向至 [[:@ID@]]。';
+$lang['pagemanagement']     = '頁面管理';
 
 // rename page = rp
 $lang['rp_title']           = '頁面更名';
@@ -28,7 +29,7 @@ $lang['rp_msg_new_exist']   = '新頁面 %s 已存在。';
 $lang['rp_msg_locked']      = '頁面 %s 目前正被鎖定。';
 $lang['rp_msg_auth']        = '您沒有編輯頁面 %s 的權限。';
 $lang['rp_msg_auth_nr']     = '您沒有不建立重定向的權限。';
-$lang['rp_msg_file_conflict'] = '新頁面存在衝突性檔案 %s。';
+$lang['rp_msg_file_conflict'] = '新頁面 %s 存在衝突的檔案 %s。';
 $lang['rp_msg_success']     = '頁面 %s 已成功更名為 %s。';
 
 // delete page = dp
