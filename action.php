@@ -144,7 +144,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
                         $newfilebase = str_replace($opts['oldname'], $opts['newname'], $file);
                         $newfile = $newpath.$newfilebase;
                         if (@file_exists($newfile)) {
-                            $this->errors[] = sprintf( $this->getLang('rp_msg_file_conflict'), $newfilebase, wl($opts['newname'], 'do=revisions'), wl($opts['newname'], 'do=editx') );
+                            $this->errors[] = sprintf( $this->getLang('rp_msg_file_conflict'), '<a href="'. wl($opts['newpage']) . '">'.$opts['newpage'].'</a>', $newfilebase );
                             return false;
                         }
                         $opts['newfiles'][] = $newfile;
@@ -235,7 +235,7 @@ class action_plugin_editx extends DokuWiki_Action_Plugin {
         if (!$opts['newpage']) {
             $this->errors[] = $this->getLang('rp_msg_new_empty');
         } else if (page_exists($opts['newpage'])) {
-            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), wl($opts['newpage']),$opts['newpage'] );
+            $this->errors[] = sprintf( $this->getLang('rp_msg_new_exist'), '<a href="'. wl($opts['newpage']) . '">'.$opts['newpage'].'</a>' );
         } else if (!$this->_auth_can_rename($opts['newpage'])) {
             $this->errors[] = sprintf( $this->getLang('rp_msg_auth'), $opts['newpage'] );
         } else if (checklock($opts['newpage'])) {
