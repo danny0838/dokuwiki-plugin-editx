@@ -1,7 +1,7 @@
 base   editx
 author Danny Lin
-email  danny[dot]0838[at]gmail[dot]com
-date   2013-03-11
+email  danny0838@gmail.com
+date   2013-03-19
 name   editx
 desc   Extended edit functions such as renaming or deleting a page
 url    http://www.dokuwiki.org/plugin:editx
