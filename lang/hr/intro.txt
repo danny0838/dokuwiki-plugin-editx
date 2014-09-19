@@ -1,0 +1,3 @@
+====== Upravljanje stranicama ======
+
+Koristi @LINK@ za preimenovanje ili brisanje ove stranice.
